@@ -28,11 +28,11 @@ class LVLMNode(Node):
         
         self.bridge = CvBridge()
         self.trigger_active = False
-        self._target_object = None
+        self._target_objects = None
 
         # Throttle frequency (optional)
         self.last_call = self.get_clock().now()
-        self.interval = Duration(seconds=60)
+        self.interval = Duration(seconds=20)
 
         # Load InternVL3-2B model once
         self.get_logger().info("Loading internvl3-2B model...")
@@ -57,9 +57,9 @@ class LVLMNode(Node):
     def target_object_callback(self, msg):
         data_cleaned = msg.data.strip().lower()
         if data_cleaned == "":
-            self._target_object = None
+            self._target_objects = None
         else:
-            self._target_object = data_cleaned
+            self._target_objects = data_cleaned
         #print("self._target_object", self._target_object)
 
     def image_callback(self, msg: Image):
@@ -70,7 +70,7 @@ class LVLMNode(Node):
         if (now - self.last_call) < self.interval:
             return  # skip if called too soon
 
-        if self._target_object is not None:
+        if self._target_objects is not None:
             # prompt = (
             #     f"USER: <image>\n"
             #     f"Find {self._target_object} in this scene. "
@@ -87,8 +87,8 @@ class LVLMNode(Node):
             pil_image = PIL_Image.fromarray(cv_image) 
 
             pixel_values = self.load_image(pil_image, max_num=1).to(torch.bfloat16).cuda()
-            prompt = (f'<image>\nFind {self._target_object}. ' 
-                      f'List three unique objects or areas that are most helpful as clues or context to locate the {self._target_object}. ' 
+            prompt = (f'<image>\nFind {self._target_objects}. ' 
+                      f'List three unique objects or areas that are most helpful as clues or context to locate the {self._target_objects}. ' 
                       f'Write ONLY the object or area names as a plain comma-separated list.')
             response = self.model.chat(self.tokenizer, pixel_values, prompt, self.generation_config)
             print(f'User: {prompt}\nAssistant: {response}')
@@ -204,7 +204,6 @@ class LVLMNode(Node):
 
 
     def load_image(self, image, input_size=448, max_num=1):
-        #image = PIL_Image.open(image_file).convert('RGB')
         transform = self.build_transform(input_size=input_size)
         images = self.dynamic_preprocess(image, image_size=input_size, use_thumbnail=True, max_num=max_num)
         pixel_values = [transform(image) for image in images]
